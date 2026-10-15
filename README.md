@@ -1,6 +1,6 @@
 # Ballot — Class Election
 
-Ballot is the **Class Election** project from Week 2, Session 4. It gives a class a simple, honest way to vote once, see ranked results, preserve ties, and manage the ballot without a backend.
+Ballot gives a class a simple, honest way to vote once, see ranked results, preserve ties, and manage the ballot without a backend.
 
 ## Features
 
@@ -31,19 +31,9 @@ Screenshots are stored in `screenshots/`:
 | --- | --- |
 | ![Ranked results](screenshots/results.png) | ![Candidate management](screenshots/candidates.png) |
 
-## Think
+## Business rules
 
-### 1. Why must names be cleaned before they are compared?
-
-People type the same name in different ways. Without cleaning, ` aline `, `ALINE`, and `Aline` would look like three different voters, so one person could vote more than once. The app trims outside spaces, replaces repeated inside spaces with one space, converts the name to Title Case for display, and compares a lowercase version.
-
-### 2. How does the app decide between a winner and a tie?
-
-The app ranks candidates from the highest vote count to the lowest. It takes the top score and finds every candidate with that score. One candidate means there is a winner; two or more means there is a tie, so every tied name is shown instead of inventing a winner.
-
-## How the rules are organized
-
-All election rules live in `ElectionController`, outside widget `build` methods. Screens call functions such as `vote`, `addCandidate`, `removeCandidate`, `undoLastVote`, and `resetVotes`, then render the controller's current data.
+Names are normalized before comparison so differences in spaces or capitalization cannot create duplicate voters or candidates. Results rank candidates by vote count, preserve all equal leaders as a true tie, and safely show zero percent before the first vote. All election rules live in `ElectionController`, outside widget `build` methods.
 
 ## Run
 
