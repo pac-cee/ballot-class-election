@@ -4,5 +4,5 @@ import 'app.dart';
 import 'state/election_controller.dart';
 
 void main() {
-  runApp(BallotApp(controller: ElectionController.withSamples()));
+  runApp(BallotApp(controller: ElectionController.demo()));
 }

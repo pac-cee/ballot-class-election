@@ -113,5 +113,78 @@ void main() {
       expect(controller.candidates, hasLength(3));
       expect(controller.resultSummary, 'No votes yet');
     });
+
+    test(
+      'mock authentication validates input and creates a verified profile',
+      () {
+        final controller = ElectionController.demo();
+
+        expect(
+          controller.login(email: 'not-an-email', password: 'vote2026'),
+          AuthStatus.invalidEmail,
+        );
+        expect(
+          controller.register(
+            name: '  aline   uwase ',
+            email: 'aline@school.edu',
+            password: 'vote2026',
+          ),
+          AuthStatus.success,
+        );
+        expect(controller.currentUser?.name, 'Aline Uwase');
+        expect(controller.isAuthenticated, isTrue);
+      },
+    );
+
+    test(
+      'class spaces switch independently and closed ballots reject votes',
+      () {
+        final controller = ElectionController.demo();
+        final firstElectionCandidateCount = controller.candidates.length;
+
+        controller.selectElection(2);
+        final result = controller.vote(
+          voterName: 'Aline Uwase',
+          candidateId: controller.candidates.first.id,
+        );
+
+        expect(firstElectionCandidateCount, 4);
+        expect(controller.candidates, hasLength(2));
+        expect(result.status, VoteStatus.electionClosed);
+      },
+    );
+
+    test('campaign posts are added and liked locally', () {
+      final controller = ElectionController.demo();
+      final candidate = controller.candidates.first;
+
+      expect(
+        controller.addCampaignPost(
+          candidateId: candidate.id,
+          body: '  New town hall after class.  ',
+        ),
+        PostStatus.success,
+      );
+      final post = controller.posts.first;
+      controller.togglePostLike(post);
+
+      expect(post.body, 'New town hall after class.');
+      expect(controller.posts.first.isLiked, isTrue);
+      expect(controller.posts.first.likes, 1);
+    });
+
+    test('signed-in student receives a private vote receipt state', () {
+      final controller = ElectionController.demo()..continueDemo();
+      final candidate = controller.candidates.first;
+
+      final result = controller.vote(
+        voterName: controller.currentUser!.name,
+        candidateId: candidate.id,
+      );
+
+      expect(result.status, VoteStatus.success);
+      expect(controller.hasVoted, isTrue);
+      expect(controller.selectedElection.votedCandidateId, candidate.id);
+    });
   });
 }

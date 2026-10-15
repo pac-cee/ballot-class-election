@@ -9,7 +9,7 @@ const screen = String.fromEnvironment('SCREEN', defaultValue: 'vote');
 
 void main() {
   final controller = screen == 'vote' || screen == 'notice'
-      ? ElectionController.withSamples()
+      ? ElectionController.demo()
       : ElectionController(
           candidates: [
             Candidate(id: 1, name: 'Keza Uwase', votes: 4),
@@ -17,6 +17,7 @@ void main() {
             Candidate(id: 3, name: 'Eric Mugisha', votes: 1),
           ],
         );
+  controller.continueDemo();
   runApp(_ScreenshotApp(controller: controller));
 }
 
@@ -28,8 +29,9 @@ class _ScreenshotApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final index = switch (screen) {
-      'results' => 1,
+      'results' => 3,
       'candidates' => 2,
+      'vote' || 'notice' => 1,
       _ => 0,
     };
     return MaterialApp(

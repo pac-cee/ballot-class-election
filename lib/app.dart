@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/widgets/election_skeleton.dart';
+import 'features/auth/auth_screen.dart';
 import 'navigation/election_shell.dart';
 import 'state/election_controller.dart';
 
@@ -40,26 +41,34 @@ class _BallotAppState extends State<BallotApp> {
       title: 'Ballot',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 240),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.015),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
+      home: ListenableBuilder(
+        listenable: widget.controller,
+        builder: (context, _) => AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, .015),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
           ),
+          child: !ready
+              ? const ElectionSkeleton(key: ValueKey('skeleton'))
+              : widget.controller.isAuthenticated
+              ? ElectionShell(
+                  key: const ValueKey('election'),
+                  controller: widget.controller,
+                )
+              : AuthScreen(
+                  key: const ValueKey('auth'),
+                  controller: widget.controller,
+                ),
         ),
-        child: ready
-            ? ElectionShell(
-                key: const ValueKey('election'),
-                controller: widget.controller,
-              )
-            : const ElectionSkeleton(key: ValueKey('skeleton')),
       ),
     );
   }

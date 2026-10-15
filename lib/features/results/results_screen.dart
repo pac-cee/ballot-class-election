@@ -1,280 +1,230 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/app_notice.dart';
-import '../../core/widgets/page_header.dart';
+import '../../core/widgets/election_ui.dart';
 import '../../models/candidate.dart';
+import '../../models/election.dart';
 import '../../state/election_controller.dart';
 
 class ResultsScreen extends StatelessWidget {
   const ResultsScreen({super.key, required this.controller});
-
   final ElectionController controller;
-
-  Future<void> confirmReset(BuildContext context) async {
-    if (controller.totalVotes == 0) {
-      showNotice(
-        context,
-        message: 'There are no votes to reset.',
-        tone: NoticeTone.info,
-      );
-      return;
-    }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFE7E3),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Icon(Icons.restart_alt_rounded, color: AppColors.danger),
-        ),
-        title: const Text('Reset every vote?'),
-        content: const Text(
-          'This clears the vote count and voter history. Candidates will stay.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Reset Votes'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    controller.resetVotes();
-    showNotice(context, message: 'All votes have been reset.');
-  }
 
   @override
   Widget build(BuildContext context) {
-    final ranked = controller.rankedCandidates;
+    final election = controller.selectedElection;
+    final live = election.status == ElectionStatus.live;
     return SafeArea(
       bottom: false,
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-            sliver: SliverToBoxAdapter(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: RefreshIndicator(
+        onRefresh: () async =>
+            Future<void>.delayed(const Duration(milliseconds: 600)),
+        color: AppColors.ink,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            AppPagePadding(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      PageHeader(
-                        eyebrow: 'Live count',
-                        title: 'Election results',
-                        description: 'Ranked automatically after every vote. Ties stay ties.',
-                        trailing: IconButton.outlined(
-                          onPressed: () => confirmReset(context),
-                          tooltip: 'Reset all votes',
-                          icon: const Icon(Icons.restart_alt_rounded),
-                        ),
+                      StatusPill(
+                        label: live
+                            ? 'Live count'
+                            : election.status == ElectionStatus.closed
+                            ? 'Final result'
+                            : 'Preview',
+                        color: live ? AppColors.primary : AppColors.teal,
                       ),
-                      const SizedBox(height: 22),
-                      _ResultBanner(controller: controller),
-                      const SizedBox(height: 26),
-                      Row(
-                        children: [
-                          Text(
-                            'Ranking',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const Spacer(),
-                          Text(
-                            '${controller.totalVotes} total',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
+                      const Spacer(),
+                      IconButton.outlined(
+                        onPressed: () => _showResultInfo(context),
+                        tooltip: 'About results',
+                        icon: const Icon(Icons.info_outline_rounded),
                       ),
-                      const SizedBox(height: 12),
                     ],
                   ),
-                ),
-              ),
-            ),
-          ),
-          if (ranked.isEmpty)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: Text('Add a candidate to begin.')),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-              sliver: SliverList.separated(
-                itemCount: ranked.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) => Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
-                    child: _ResultRow(
-                      candidate: ranked[index],
-                      rank: index + 1,
-                      percentage: controller.percentageFor(ranked[index]),
+                  const SizedBox(height: 16),
+                  Text(
+                    'The class has spoken',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    '${election.title} · ${election.group}',
+                    style: Theme.of(context).textTheme.bodyLarge
+                        ?.copyWith(color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 22),
+                  _ResultHero(controller: controller),
+                  const SizedBox(height: 28),
+                  SectionTitle(
+                    title: 'Live ranking',
+                    subtitle: '${controller.totalVotes} ballots counted',
+                    trailing: Text(
+                      '${controller.turnoutPercent}% turnout',
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      children: [
+                        for (
+                          var i = 0;
+                          i < controller.rankedCandidates.length;
+                          i++
+                        )
+                          _RankingRow(
+                            candidate: controller.rankedCandidates[i],
+                            rank: i + 1,
+                            percentage: controller.percentageFor(
+                              controller.rankedCandidates[i],
+                            ),
+                            last: i == controller.rankedCandidates.length - 1,
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF7F5),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.shield_outlined,
+                          color: AppColors.success,
+                        ),
+                        const SizedBox(width: 11),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Privacy preserved',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Results aggregate totals only. Individual student choices are never displayed.',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Center(
+                    child: Text(
+                      'Pull down to refresh the mocked live count',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
+  void _showResultInfo(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      icon: const Icon(Icons.insights_rounded, size: 34),
+      title: const Text('How results work'),
+      content: const Text(
+        'This classroom prototype recalculates rankings immediately after every vote. A real deployment would use an audited backend, encrypted ballots, and a formal election close.',
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Got it'),
+        ),
+      ],
+    ),
+  );
 }
 
-class _ResultBanner extends StatelessWidget {
-  const _ResultBanner({required this.controller});
-
+class _ResultHero extends StatelessWidget {
+  const _ResultHero({required this.controller});
   final ElectionController controller;
-
   @override
   Widget build(BuildContext context) {
-    final hasVotes = controller.totalVotes > 0;
-    final isTie = controller.leaders.length > 1;
+    final leader = controller.leaders.isEmpty ? null : controller.leaders.first;
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: hasVotes ? AppColors.ink : const Color(0xFFEAF0F6),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: hasVotes
-                  ? AppColors.gold
-                  : Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              isTie ? Icons.balance_rounded : Icons.emoji_events_outlined,
-              color: AppColors.ink,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hasVotes ? 'CURRENT RESULT' : 'WAITING FOR VOTES',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: hasVotes ? const Color(0xFFAEC3D5) : AppColors.muted,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  controller.resultSummary,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: hasVotes ? Colors.white : AppColors.ink,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResultRow extends StatelessWidget {
-  const _ResultRow({
-    required this.candidate,
-    required this.rank,
-    required this.percentage,
-  });
-
-  final Candidate candidate;
-  final int rank;
-  final double percentage;
-
-  @override
-  Widget build(BuildContext context) {
-    final percentText = '${(percentage * 100).toStringAsFixed(1)}%';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        color: AppColors.ink,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: rank == 1
-                  ? const Color(0xFFFFE9B8)
-                  : const Color(0xFFEAF0F6),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '$rank',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          SizedBox(
+            width: 116,
+            height: 116,
+            child: CustomPaint(
+              painter: _TurnoutPainter(value: controller.turnoutPercent / 100),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Text(
-                        candidate.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                    Text(
+                      '${controller.turnoutPercent}%',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(color: Colors.white),
                     ),
                     Text(
-                      percentText,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(color: AppColors.primary),
+                      'turnout',
+                      style: Theme.of(context).textTheme.labelMedium
+                          ?.copyWith(color: Colors.white60),
                     ),
                   ],
                 ),
-                const SizedBox(height: 7),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: percentage),
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : const Duration(milliseconds: 560),
-                  curve: Curves.easeOutCubic,
-                  builder: (context, value, _) => ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      value: value,
-                      minHeight: 8,
-                      backgroundColor: const Color(0xFFE6EDF5),
-                      color: rank == 1
-                          ? AppColors.primary
-                          : const Color(0xFF73A4FF),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 5),
+              ),
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  '${candidate.votes} ${candidate.votes == 1 ? 'vote' : 'votes'}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  controller.selectedElection.status == ElectionStatus.closed
+                      ? 'WINNER'
+                      : 'CURRENT LEADER',
+                  style: Theme.of(context).textTheme.labelMedium
+                      ?.copyWith(color: AppColors.primary, letterSpacing: 1.4),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  leader?.name ?? 'No votes yet',
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(color: Colors.white),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  leader == null
+                      ? 'Waiting for the first ballot.'
+                      : '${leader.votes} votes · ${(controller.percentageFor(leader) * 100).toStringAsFixed(1)}%',
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: Colors.white70),
                 ),
               ],
             ),
@@ -283,4 +233,116 @@ class _ResultRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TurnoutPainter extends CustomPainter {
+  const _TurnoutPainter({required this.value});
+  final double value;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = (size.shortestSide - 11) / 2;
+    const stroke = 9.0;
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = Colors.white.withValues(alpha: .12)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      math.pi * 2 * value.clamp(0, 1),
+      false,
+      Paint()
+        ..color = AppColors.primary
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TurnoutPainter oldDelegate) =>
+      oldDelegate.value != value;
+}
+
+class _RankingRow extends StatelessWidget {
+  const _RankingRow({
+    required this.candidate,
+    required this.rank,
+    required this.percentage,
+    required this.last,
+  });
+  final Candidate candidate;
+  final int rank;
+  final double percentage;
+  final bool last;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      border: last
+          ? null
+          : const Border(bottom: BorderSide(color: AppColors.border)),
+    ),
+    child: Row(
+      children: [
+        Text(
+          rank.toString().padLeft(2, '0'),
+          style: Theme.of(context).textTheme.labelLarge
+              ?.copyWith(color: rank == 1 ? AppColors.ink : AppColors.muted),
+        ),
+        const SizedBox(width: 12),
+        CandidateAvatar(candidate: candidate, size: 46),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      candidate.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  Text(
+                    '${(percentage * 100).toStringAsFixed(1)}%',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: percentage),
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 520),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, _) => ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: LinearProgressIndicator(
+                    value: value,
+                    minHeight: 7,
+                    backgroundColor: AppColors.soft,
+                    color: Color(candidate.colorValue),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                '${candidate.votes} votes',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
